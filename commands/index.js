@@ -60,7 +60,7 @@ const play = {
 
       return interaction.reply({
         content:
-          "❌ আগে একটি voice channel-এ join করো.",
+          "❌ Join a voice channel first.",
         ephemeral: true
       });
 
@@ -112,7 +112,7 @@ const play = {
     ) {
 
       return interaction.editReply(
-        "❌ কোনো গান পাওয়া যায়নি."
+        "❌ No songs were found."
       );
 
     }
@@ -138,7 +138,7 @@ const play = {
       }
 
       await interaction.editReply(
-        `📀 **${result.tracks.length}** টি গান queue-তে যোগ হয়েছে.`
+        `📀 **${result.tracks.length}** The song has been added to the queue.`
       );
 
     }
@@ -158,7 +158,7 @@ const play = {
       );
 
       await interaction.editReply(
-        `🎵 **${track.info.title}** queue-তে যোগ হয়েছে.`
+        `🎵 **${track.info.title}** Added to queue.`
       );
 
     }
@@ -206,7 +206,7 @@ const skip = {
     ) {
 
       return interaction.reply(
-        "❌ এখন কোনো গান চলছে না."
+        "❌ No music is playing now."
       );
 
     }
@@ -251,7 +251,7 @@ const pause = {
     ) {
 
       return interaction.reply(
-        "❌ কোনো গান চলছে না."
+        "❌ No music is playing."
       );
 
     }
@@ -296,7 +296,7 @@ const resume = {
     ) {
 
       return interaction.reply(
-        "❌ কোনো গান paused নেই."
+        "❌ No song is paused."
       );
 
     }
@@ -338,7 +338,7 @@ const stop = {
     if (!player) {
 
       return interaction.reply(
-        "❌ Music player নেই."
+        "❌ No music player."
       );
 
     }
