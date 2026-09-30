@@ -10,13 +10,22 @@ const {
 
 const { Riffy } = require("riffy");
 
+// =========================
+// MUSIC PANEL
+// =========================
+
+const {
+  sendMusicPanel,
+  handleMusicButton
+} = require("./musicPanel");
+
+// =========================
+// EXPRESS
+// =========================
+
 const app = express();
 
 const PORT = Number(process.env.PORT || 10000);
-
-// =========================
-// WEB SERVER FOR RENDER
-// =========================
 
 app.get("/", (req, res) => {
   res.status(200).send("🎵 Outlaws Music Bot is Online!");
@@ -136,25 +145,45 @@ client.on("raw", data => {
 });
 
 // =========================
-// SLASH COMMANDS
+// INTERACTIONS
 // =========================
 
 client.on(
   "interactionCreate",
   async interaction => {
-
-    if (!interaction.isChatInputCommand()) {
-      return;
-    }
-
-    const command =
-      commands[interaction.commandName];
-
-    if (!command) {
-      return;
-    }
-
     try {
+
+      // =========================
+      // MUSIC PANEL BUTTONS
+      // =========================
+
+      if (interaction.isButton()) {
+
+        const handled =
+          await handleMusicButton(
+            interaction,
+            client
+          );
+
+        if (handled) {
+          return;
+        }
+      }
+
+      // =========================
+      // SLASH COMMANDS
+      // =========================
+
+      if (!interaction.isChatInputCommand()) {
+        return;
+      }
+
+      const command =
+        commands[interaction.commandName];
+
+      if (!command) {
+        return;
+      }
 
       await command.execute(
         interaction,
@@ -164,31 +193,35 @@ client.on(
     } catch (error) {
 
       console.error(
-        `❌ ${interaction.commandName}:`,
+        "❌ Interaction Error:",
         error
       );
 
       const message =
         "❌ Something went wrong. Check Render logs.";
 
-      if (
-        interaction.replied ||
-        interaction.deferred
-      ) {
+      try {
 
-        await interaction.followUp({
-          content: message,
-          ephemeral: true
-        });
+        if (
+          interaction.replied ||
+          interaction.deferred
+        ) {
 
-      } else {
+          await interaction.followUp({
+            content: message,
+            ephemeral: true
+          });
 
-        await interaction.reply({
-          content: message,
-          ephemeral: true
-        });
+        } else {
 
-      }
+          await interaction.reply({
+            content: message,
+            ephemeral: true
+          });
+
+        }
+
+      } catch {}
     }
   }
 );
@@ -230,22 +263,26 @@ client.riffy.on(
 
 client.riffy.on(
   "trackStart",
-  (player, track) => {
+  async (player, track) => {
 
     console.log(
       `🎵 Playing: ${track.info.title}`
     );
 
-    const channel =
-      client.channels.cache.get(
-        player.textChannel
+    try {
+
+      await sendMusicPanel(
+        client,
+        player,
+        track
       );
 
-    if (channel) {
+    } catch (error) {
 
-      channel.send(
-        `🎶 Now Playing: **${track.info.title}**`
-      ).catch(() => {});
+      console.error(
+        "❌ Music Panel Error:",
+        error
+      );
 
     }
   }
@@ -259,7 +296,9 @@ client.riffy.on(
   "queueEnd",
   player => {
 
-    console.log("📭 Queue finished.");
+    console.log(
+      "📭 Queue finished."
+    );
 
     const channel =
       client.channels.cache.get(
@@ -268,9 +307,9 @@ client.riffy.on(
 
     if (channel) {
 
-      channel.send(
-        "✅ Queue finished."
-      ).catch(() => {});
+      channel
+        .send("✅ Queue finished.")
+        .catch(() => {});
 
     }
 
@@ -281,7 +320,7 @@ client.riffy.on(
 );
 
 // =========================
-// ERRORS
+// UNHANDLED REJECTION
 // =========================
 
 process.on(
@@ -289,19 +328,23 @@ process.on(
   error => {
 
     console.error(
-      "Unhandled Rejection:",
+      "❌ Unhandled Rejection:",
       error
     );
 
   }
 );
 
+// =========================
+// UNCaught EXCEPTION
+// =========================
+
 process.on(
   "uncaughtException",
   error => {
 
     console.error(
-      "Uncaught Exception:",
+      "❌ Uncaught Exception:",
       error
     );
 
