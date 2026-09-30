@@ -1,35 +1,49 @@
 require("dotenv").config();
 
 const express = require("express");
+
 const {
   Client,
   GatewayIntentBits,
   GatewayDispatchEvents
 } = require("discord.js");
+
 const { Riffy } = require("riffy");
 
 const app = express();
 
-const PORT = process.env.PORT || 10000;
+const PORT = Number(process.env.PORT || 10000);
+
+// =========================
+// WEB SERVER FOR RENDER
+// =========================
 
 app.get("/", (req, res) => {
-  res.send("🎵 Outlaws Music Bot is Online!");
+  res.status(200).send("🎵 Outlaws Music Bot is Online!");
 });
 
 app.get("/health", (req, res) => {
-  res.json({
+  const nodes = client.riffy?.nodes
+    ? Array.from(client.riffy.nodes.values()).map(node => ({
+        name: node.name,
+        connected: node.connected
+      }))
+    : [];
+
+  res.status(200).json({
     status: "online",
     bot: client.user?.tag || "starting",
-    lavalink: client.riffy?.nodes?.map(node => ({
-      name: node.name,
-      connected: node.connected
-    })) || []
+    lavalink: nodes
   });
 });
 
 app.listen(PORT, () => {
   console.log(`🌐 Web server running on port ${PORT}`);
 });
+
+// =========================
+// DISCORD CLIENT
+// =========================
 
 const client = new Client({
   intents: [
@@ -40,19 +54,33 @@ const client = new Client({
   ]
 });
 
+// =========================
+// LAVALINK
+// =========================
+
 const nodes = [
   {
     name: "Main",
+
     host: process.env.LAVALINK_HOST,
-    port: Number(process.env.LAVALINK_PORT),
+
+    port: Number(
+      process.env.LAVALINK_PORT || 2333
+    ),
+
     password: process.env.LAVALINK_PASSWORD,
-    secure: process.env.LAVALINK_SECURE === "true"
+
+    secure:
+      String(process.env.LAVALINK_SECURE)
+        .toLowerCase() === "true"
   }
 ];
 
 client.riffy = new Riffy(client, nodes, {
   send: payload => {
-    const guild = client.guilds.cache.get(payload.d.guild_id);
+    const guild = client.guilds.cache.get(
+      payload.d.guild_id
+    );
 
     if (guild) {
       guild.shard.send(payload);
@@ -64,10 +92,20 @@ client.riffy = new Riffy(client, nodes, {
   restVersion: "v4"
 });
 
+// =========================
+// COMMANDS
+// =========================
+
 const commands = require("./commands");
 
+// =========================
+// READY
+// =========================
+
 client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+  console.log(
+    `✅ Logged in as ${client.user.tag}`
+  );
 
   client.riffy.init(client.user.id);
 
@@ -82,6 +120,10 @@ client.once("ready", () => {
   });
 });
 
+// =========================
+// VOICE STATE
+// =========================
+
 client.on("raw", data => {
   if (
     data.t !== GatewayDispatchEvents.VoiceStateUpdate &&
@@ -93,64 +135,183 @@ client.on("raw", data => {
   client.riffy.updateVoiceState(data);
 });
 
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand()) return;
+// =========================
+// SLASH COMMANDS
+// =========================
 
-  const command = commands[interaction.commandName];
+client.on(
+  "interactionCreate",
+  async interaction => {
 
-  if (!command) return;
+    if (!interaction.isChatInputCommand()) {
+      return;
+    }
 
-  try {
-    await command.execute(interaction, client);
-  } catch (error) {
-    console.error(error);
+    const command =
+      commands[interaction.commandName];
 
-    const message =
-      "❌ Command failed. Check Render logs.";
+    if (!command) {
+      return;
+    }
 
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({
-        content: message,
-        ephemeral: true
-      });
-    } else {
-      await interaction.reply({
-        content: message,
-        ephemeral: true
-      });
+    try {
+
+      await command.execute(
+        interaction,
+        client
+      );
+
+    } catch (error) {
+
+      console.error(
+        `❌ ${interaction.commandName}:`,
+        error
+      );
+
+      const message =
+        "❌ Something went wrong. Check Render logs.";
+
+      if (
+        interaction.replied ||
+        interaction.deferred
+      ) {
+
+        await interaction.followUp({
+          content: message,
+          ephemeral: true
+        });
+
+      } else {
+
+        await interaction.reply({
+          content: message,
+          ephemeral: true
+        });
+
+      }
     }
   }
-});
+);
 
-client.riffy.on("nodeConnect", node => {
-  console.log(`🟢 Lavalink Connected: ${node.name}`);
-});
+// =========================
+// LAVALINK CONNECT
+// =========================
 
-client.riffy.on("nodeError", (node, error) => {
-  console.error(
-    `🔴 Lavalink Error (${node.name}):`,
-    error.message
-  );
-});
+client.riffy.on(
+  "nodeConnect",
+  node => {
 
-client.riffy.on("trackStart", (player, track) => {
-  console.log(`🎵 Playing: ${track.info.title}`);
-});
+    console.log(
+      `🟢 Lavalink Connected: ${node.name}`
+    );
 
-client.riffy.on("queueEnd", player => {
-  console.log("📭 Queue finished.");
+  }
+);
 
-  try {
-    player.destroy();
-  } catch {}
-});
+// =========================
+// LAVALINK ERROR
+// =========================
 
-process.on("unhandledRejection", error => {
-  console.error("Unhandled Rejection:", error);
-});
+client.riffy.on(
+  "nodeError",
+  (node, error) => {
 
-process.on("uncaughtException", error => {
-  console.error("Uncaught Exception:", error);
-});
+    console.error(
+      `🔴 Lavalink Error (${node.name}):`,
+      error.message
+    );
 
-client.login(process.env.DISCORD_TOKEN);
+  }
+);
+
+// =========================
+// TRACK START
+// =========================
+
+client.riffy.on(
+  "trackStart",
+  (player, track) => {
+
+    console.log(
+      `🎵 Playing: ${track.info.title}`
+    );
+
+    const channel =
+      client.channels.cache.get(
+        player.textChannel
+      );
+
+    if (channel) {
+
+      channel.send(
+        `🎶 Now Playing: **${track.info.title}**`
+      ).catch(() => {});
+
+    }
+  }
+);
+
+// =========================
+// QUEUE END
+// =========================
+
+client.riffy.on(
+  "queueEnd",
+  player => {
+
+    console.log("📭 Queue finished.");
+
+    const channel =
+      client.channels.cache.get(
+        player.textChannel
+      );
+
+    if (channel) {
+
+      channel.send(
+        "✅ Queue finished."
+      ).catch(() => {});
+
+    }
+
+    try {
+      player.destroy();
+    } catch {}
+  }
+);
+
+// =========================
+// ERRORS
+// =========================
+
+process.on(
+  "unhandledRejection",
+  error => {
+
+    console.error(
+      "Unhandled Rejection:",
+      error
+    );
+
+  }
+);
+
+process.on(
+  "uncaughtException",
+  error => {
+
+    console.error(
+      "Uncaught Exception:",
+      error
+    );
+
+  }
+);
+
+// =========================
+// LOGIN
+// =========================
+
+client.login(
+  process.env.DISCORD_TOKEN
+);
