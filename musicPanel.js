@@ -5,7 +5,7 @@ const {
   ButtonStyle
 } = require("discord.js");
 
-const PANEL_CHANNEL_ID = "1547515109667241984";
+const PANEL_CHANNEL_ID = "1555156668596224020";
 const PANEL_REFRESH_MS = 10000;
 
 const panels = new Map();
