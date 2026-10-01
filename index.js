@@ -10,44 +10,51 @@ const {
 
 const { Riffy } = require("riffy");
 
-// =========================
-// MUSIC PANEL
-// =========================
-
 const {
   sendMusicPanel,
   handleMusicButton
 } = require("./musicPanel");
 
-// =========================
-// EXPRESS
-// =========================
-
 const app = express();
 
-const PORT = Number(process.env.PORT || 10000);
+const PORT =
+  Number(process.env.PORT || 10000);
+
+// =========================
+// RENDER WEB SERVER
+// =========================
 
 app.get("/", (req, res) => {
-  res.status(200).send("🎵 Outlaws Music Bot is Online!");
+  res
+    .status(200)
+    .send("🎵 Outlaws Music Bot is Online!");
 });
 
 app.get("/health", (req, res) => {
-  const nodes = client.riffy?.nodes
-    ? Array.from(client.riffy.nodes.values()).map(node => ({
-        name: node.name,
-        connected: node.connected
-      }))
-    : [];
 
-  res.status(200).json({
+  const nodes =
+    client.riffy?.nodes
+      ? Array.from(
+          client.riffy.nodes.values()
+        ).map(node => ({
+          name: node.name,
+          connected: node.connected
+        }))
+      : [];
+
+  res.json({
     status: "online",
-    bot: client.user?.tag || "starting",
+    bot:
+      client.user?.tag ||
+      "starting",
     lavalink: nodes
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`🌐 Web server running on port ${PORT}`);
+  console.log(
+    `🌐 Web server running on port ${PORT}`
+  );
 });
 
 // =========================
@@ -71,78 +78,106 @@ const nodes = [
   {
     name: "Main",
 
-    host: process.env.LAVALINK_HOST,
+    host:
+      process.env.LAVALINK_HOST,
 
-    port: Number(
-      process.env.LAVALINK_PORT || 2333
-    ),
+    port:
+      Number(
+        process.env.LAVALINK_PORT || 2333
+      ),
 
-    password: process.env.LAVALINK_PASSWORD,
+    password:
+      process.env.LAVALINK_PASSWORD,
 
     secure:
-      String(process.env.LAVALINK_SECURE)
-        .toLowerCase() === "true"
+      String(
+        process.env.LAVALINK_SECURE
+      ).toLowerCase() === "true"
   }
 ];
 
-client.riffy = new Riffy(client, nodes, {
-  send: payload => {
-    const guild = client.guilds.cache.get(
-      payload.d.guild_id
-    );
+client.riffy =
+  new Riffy(
+    client,
+    nodes,
+    {
+      send: payload => {
 
-    if (guild) {
-      guild.shard.send(payload);
+        const guild =
+          client.guilds.cache.get(
+            payload.d.guild_id
+          );
+
+        if (guild) {
+          guild.shard.send(payload);
+        }
+      },
+
+      defaultSearchPlatform:
+        "ytmsearch",
+
+      restVersion: "v4"
     }
-  },
-
-  defaultSearchPlatform: "ytmsearch",
-
-  restVersion: "v4"
-});
+  );
 
 // =========================
 // COMMANDS
 // =========================
 
-const commands = require("./commands");
+const commands =
+  require("./commands");
 
 // =========================
 // READY
 // =========================
 
-client.once("ready", () => {
-  console.log(
-    `✅ Logged in as ${client.user.tag}`
-  );
+client.once(
+  "ready",
+  () => {
 
-  client.riffy.init(client.user.id);
+    console.log(
+      `✅ Logged in as ${client.user.tag}`
+    );
 
-  client.user.setPresence({
-    activities: [
-      {
-        name: "🎵 Outlaws Music",
-        type: 2
-      }
-    ],
-    status: "online"
-  });
-});
+    client.riffy.init(
+      client.user.id
+    );
+
+    client.user.setPresence({
+      activities: [
+        {
+          name:
+            "🎵 Outlaws Music",
+          type: 2
+        }
+      ],
+      status: "online"
+    });
+  }
+);
 
 // =========================
 // VOICE STATE
 // =========================
 
-client.on("raw", data => {
-  if (
-    data.t !== GatewayDispatchEvents.VoiceStateUpdate &&
-    data.t !== GatewayDispatchEvents.VoiceServerUpdate
-  ) {
-    return;
-  }
+client.on(
+  "raw",
+  data => {
 
-  client.riffy.updateVoiceState(data);
-});
+    if (
+      data.t !==
+        GatewayDispatchEvents.VoiceStateUpdate &&
+      data.t !==
+        GatewayDispatchEvents.VoiceServerUpdate
+    ) {
+      return;
+    }
+
+    client.riffy.updateVoiceState(
+      data
+    );
+  }
+);
 
 // =========================
 // INTERACTIONS
@@ -151,13 +186,13 @@ client.on("raw", data => {
 client.on(
   "interactionCreate",
   async interaction => {
+
     try {
 
-      // =========================
-      // MUSIC PANEL BUTTONS
-      // =========================
-
-      if (interaction.isButton()) {
+      // MUSIC PANEL BUTTON
+      if (
+        interaction.isButton()
+      ) {
 
         const handled =
           await handleMusicButton(
@@ -170,16 +205,17 @@ client.on(
         }
       }
 
-      // =========================
-      // SLASH COMMANDS
-      // =========================
-
-      if (!interaction.isChatInputCommand()) {
+      // SLASH COMMAND
+      if (
+        !interaction.isChatInputCommand()
+      ) {
         return;
       }
 
       const command =
-        commands[interaction.commandName];
+        commands[
+          interaction.commandName
+        ];
 
       if (!command) {
         return;
@@ -237,7 +273,6 @@ client.riffy.on(
     console.log(
       `🟢 Lavalink Connected: ${node.name}`
     );
-
   }
 );
 
@@ -253,7 +288,6 @@ client.riffy.on(
       `🔴 Lavalink Error (${node.name}):`,
       error.message
     );
-
   }
 );
 
@@ -283,7 +317,6 @@ client.riffy.on(
         "❌ Music Panel Error:",
         error
       );
-
     }
   }
 );
@@ -300,19 +333,6 @@ client.riffy.on(
       "📭 Queue finished."
     );
 
-    const channel =
-      client.channels.cache.get(
-        player.textChannel
-      );
-
-    if (channel) {
-
-      channel
-        .send("✅ Queue finished.")
-        .catch(() => {});
-
-    }
-
     try {
       player.destroy();
     } catch {}
@@ -320,7 +340,7 @@ client.riffy.on(
 );
 
 // =========================
-// UNHANDLED REJECTION
+// ERRORS
 // =========================
 
 process.on(
@@ -331,13 +351,8 @@ process.on(
       "❌ Unhandled Rejection:",
       error
     );
-
   }
 );
-
-// =========================
-// UNCaught EXCEPTION
-// =========================
 
 process.on(
   "uncaughtException",
@@ -347,7 +362,6 @@ process.on(
       "❌ Uncaught Exception:",
       error
     );
-
   }
 );
 
