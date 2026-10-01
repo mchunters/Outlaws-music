@@ -64,10 +64,20 @@ const play = {
 
     const query = interaction.options.getString("query");
 
-    const result = await client.riffy.resolve({
-      query: query,
-      requester: interaction.user
-    });
+    let result;
+
+    try {
+      result = await client.riffy.resolve({
+        query,
+        requester: interaction.user
+      });
+    } catch (error) {
+      console.error("❌ Lavalink Resolve Error:", error);
+
+      return interaction.editReply(
+        "❌ গানটি search করতে সমস্যা হয়েছে."
+      );
+    }
 
     if (
       !result ||
@@ -86,7 +96,6 @@ const play = {
     if (result.loadType === "playlist") {
       for (const track of result.tracks) {
         track.info.requester = interaction.user;
-
         player.queue.add(track);
       }
 
@@ -239,11 +248,17 @@ const stop = {
       });
     }
 
-    player.queue.clear();
+    try {
+      player.queue.clear();
+    } catch {}
 
-    await player.stop();
+    try {
+      await player.stop();
+    } catch {}
 
-    player.destroy();
+    try {
+      player.destroy();
+    } catch {}
 
     await interaction.reply({
       content: "⏹️ Music stopped and queue cleared.",
@@ -279,7 +294,7 @@ const queue = {
     let description =
       `🎵 **Now Playing:** ${player.current.info.title}\n\n`;
 
-    if (upcoming.length) {
+    if (upcoming.length > 0) {
       description += upcoming
         .map(
           (track, index) =>
@@ -328,18 +343,4 @@ const shuffle = {
       });
     }
 
-    player.queue.shuffle();
-
-    await interaction.reply({
-      content: "🔀 Queue shuffled.",
-      ephemeral: true
-    });
-  }
-};
-
-// =====================================
-// VOLUME
-// =====================================
-
-const volume = {
-  data: new
+   
