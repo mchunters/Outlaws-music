@@ -5,151 +5,192 @@ const {
   ButtonStyle
 } = require("discord.js");
 
+const PANEL_CHANNEL_ID = "1547515109667241984";
+
 const panels = new Map();
 
-const states = new Map();
+function formatTime(ms = 0) {
+  const seconds = Math.floor(ms / 1000);
 
-function getState(guildId) {
-  if (!states.has(guildId)) {
-    states.set(guildId, {
-      volume: 100,
-      loop: "none",
-      current: null,
-      history: [],
-      goingPrevious: false
-    });
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
 
-  return states.get(guildId);
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function duration(ms) {
-  if (!ms || ms <= 0) return "Live";
+function createProgressBar(current, total, length = 15) {
+  if (!total || total <= 0) {
+    return "▱".repeat(length);
+  }
 
-  const total = Math.floor(ms / 1000);
+  const progress = Math.min(
+    length,
+    Math.max(
+      0,
+      Math.round((current / total) * length)
+    )
+  );
 
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  return (
+    "▰".repeat(progress) +
+    "▱".repeat(length - progress)
+  );
 }
 
-function createPanel(player, track, state) {
+function getLoop(player) {
+  return player.loop || "none";
+}
 
-  const queue =
-    Array.from(player.queue || []).slice(0, 5);
+function getRequester(track) {
+  return track?.info?.requester || null;
+}
 
-  const queueText =
-    queue.length
-      ? queue
-          .map(
-            (song, index) =>
-              `${index + 1}. ${song.info.title}`
-          )
-          .join("\n")
-      : "No upcoming songs.";
+function createEmbed(client, player, track) {
+  const current =
+    Number(player.position || 0);
+
+  const duration =
+    Number(
+      track?.info?.duration ||
+      track?.info?.length ||
+      0
+    );
+
+  const requester =
+    getRequester(track);
 
   const loop =
-    state.loop === "track"
-      ? "Track"
-      : state.loop === "queue"
-      ? "Queue"
-      : "Off";
+    getLoop(player);
 
   const embed =
     new EmbedBuilder()
-      .setTitle("🎵 OUTLAWS MUSIC")
-      .setDescription(
-        `### 🎶 ${track?.info?.title || "Nothing playing"}\n\n` +
-        `👤 **Artist:** ${
-          track?.info?.author || "Unknown"
-        }\n` +
-        `⏱️ **Duration:** ${
-          duration(track?.info?.length)
-        }\n` +
-        `🙋 **Requested by:** ${
-          track?.info?.requester?.username || "Unknown"
-        }\n\n` +
-        `🔊 **Volume:** ${state.volume}%\n` +
-        `🔁 **Loop:** ${loop}\n\n` +
-        `### 📋 Up Next\n${queueText}`
-      )
-      .setColor(0x8b5cf6);
+      .setColor("#F0F0A0")
+      .setAuthor({
+        name: "Now Playing 🎵",
+        iconURL:
+          client.user.displayAvatarURL()
+      })
+      .setTitle(
+        track?.info?.title ||
+        "Unknown Song"
+      );
 
-  if (track?.info?.artworkUrl) {
-    embed.setThumbnail(track.info.artworkUrl);
+  if (track?.info?.uri) {
+    embed.setURL(track.info.uri);
   }
 
+  if (track?.info?.artworkUrl) {
+    embed.setThumbnail(
+      track.info.artworkUrl
+    );
+  }
+
+  embed
+    .setDescription(
+      `${createProgressBar(
+        current,
+        duration
+      )}\n\`${formatTime(current)} / ${formatTime(duration)}\``
+    )
+    .addFields(
+      {
+        name: "👤 Artist",
+        value:
+          `\`${track?.info?.author || "Unknown"}\``,
+        inline: true
+      },
+      {
+        name: "⌛ Duration",
+        value:
+          `\`${formatTime(duration)}\``,
+        inline: true
+      },
+      {
+        name: "🎧 Requested by",
+        value:
+          requester
+            ? `${requester}`
+            : "Unknown",
+        inline: true
+      }
+    )
+    .setTimestamp()
+    .setFooter({
+      text:
+        `Volume: ${player.volume ?? 100}% | Loop: ${
+          loop === "none" ? "off" : loop
+        }`,
+      iconURL:
+        requester?.displayAvatarURL?.() ||
+        client.user.displayAvatarURL()
+    });
+
+  return embed;
+}
+
+function createButtons() {
   const row1 =
     new ActionRowBuilder().addComponents(
-
       new ButtonBuilder()
         .setCustomId("music_previous")
-        .setEmoji("⏮️")
+        .setLabel("⏮️")
         .setStyle(ButtonStyle.Secondary),
 
       new ButtonBuilder()
-        .setCustomId("music_pause")
-        .setEmoji(
-          player.paused
-            ? "▶️"
-            : "⏸️"
-        )
+        .setCustomId("music_seek_back")
+        .setLabel("⏪ 10s")
+        .setStyle(ButtonStyle.Secondary),
+
+      new ButtonBuilder()
+        .setCustomId("music_play_pause")
+        .setLabel("⏯️")
         .setStyle(ButtonStyle.Primary),
 
       new ButtonBuilder()
-        .setCustomId("music_skip")
-        .setEmoji("⏭️")
+        .setCustomId("music_seek_forward")
+        .setLabel("10s ⏩")
         .setStyle(ButtonStyle.Secondary),
 
       new ButtonBuilder()
-        .setCustomId("music_stop")
-        .setEmoji("⏹️")
-        .setStyle(ButtonStyle.Danger),
-
-      new ButtonBuilder()
-        .setCustomId("music_queue")
-        .setEmoji("📋")
+        .setCustomId("music_skip")
+        .setLabel("⏭️")
         .setStyle(ButtonStyle.Secondary)
     );
 
   const row2 =
     new ActionRowBuilder().addComponents(
-
       new ButtonBuilder()
-        .setCustomId("music_shuffle")
-        .setEmoji("🔀")
+        .setCustomId("music_volume_down")
+        .setLabel("-10 🔉")
         .setStyle(ButtonStyle.Secondary),
 
       new ButtonBuilder()
         .setCustomId("music_loop")
-        .setEmoji("🔁")
-        .setStyle(
-          state.loop === "none"
-            ? ButtonStyle.Secondary
-            : ButtonStyle.Success
-        ),
-
-      new ButtonBuilder()
-        .setCustomId("music_vol_down")
-        .setEmoji("🔉")
+        .setLabel("🔄")
         .setStyle(ButtonStyle.Secondary),
 
       new ButtonBuilder()
-        .setCustomId("music_vol_up")
-        .setEmoji("🔊")
+        .setCustomId("music_stop")
+        .setLabel("⏹️")
+        .setStyle(ButtonStyle.Danger),
+
+      new ButtonBuilder()
+        .setCustomId("music_shuffle")
+        .setLabel("🔀")
         .setStyle(ButtonStyle.Secondary),
 
       new ButtonBuilder()
-        .setCustomId("music_refresh")
-        .setEmoji("🔄")
+        .setCustomId("music_volume_up")
+        .setLabel("🔊 +10")
         .setStyle(ButtonStyle.Secondary)
     );
 
-  return {
-    embeds: [embed],
-    components: [row1, row2]
-  };
+  return [row1, row2];
 }
 
 async function sendMusicPanel(
@@ -157,81 +198,98 @@ async function sendMusicPanel(
   player,
   track
 ) {
-
   const channel =
-    client.channels.cache.get(
-      player.textChannel
-    );
+    await client.channels
+      .fetch(PANEL_CHANNEL_ID)
+      .catch(() => null);
 
-  if (!channel) return;
+  if (!channel || !channel.isTextBased()) {
+    console.error(
+      "❌ Music Panel channel not found:",
+      PANEL_CHANNEL_ID
+    );
+    return;
+  }
 
   const guildId = player.guildId;
 
-  const state =
-    getState(guildId);
-
-  if (
-    state.current &&
-    state.current.info?.uri !== track.info?.uri &&
-    !state.goingPrevious
-  ) {
-
-    state.history.push(
-      state.current
+  const embed =
+    createEmbed(
+      client,
+      player,
+      track
     );
 
-    if (state.history.length > 10) {
-      state.history.shift();
+  const components =
+    createButtons();
+
+  let state =
+    panels.get(guildId);
+
+  if (state?.interval) {
+    clearInterval(state.interval);
+  }
+
+  let message = state?.message;
+
+  if (message) {
+    try {
+      await message.edit({
+        embeds: [embed],
+        components
+      });
+    } catch {
+      message = null;
     }
   }
 
-  state.current = track;
-
-  state.goingPrevious = false;
-
-  const payload =
-    createPanel(
-      player,
-      track,
-      state
-    );
-
-  const oldMessageId =
-    panels.get(guildId);
-
-  if (oldMessageId) {
-
-    try {
-
-      const message =
-        await channel.messages.fetch(
-          oldMessageId
-        );
-
-      await message.edit(
-        payload
-      );
-
-      return;
-
-    } catch {}
+  if (!message) {
+    message = await channel.send({
+      embeds: [embed],
+      components
+    });
   }
 
-  const message =
-    await channel.send(
-      payload
-    );
+  const interval =
+    setInterval(async () => {
+      if (
+        !player ||
+        !player.current
+      ) {
+        clearInterval(interval);
+        return;
+      }
 
-  panels.set(
-    guildId,
-    message.id
-  );
+      try {
+        const updatedEmbed =
+          createEmbed(
+            client,
+            player,
+            player.current
+          );
+
+        await message.edit({
+          embeds: [updatedEmbed],
+          components: createButtons()
+        });
+      } catch {
+        clearInterval(interval);
+      }
+    }, 10000);
+
+  panels.set(guildId, {
+    message,
+    interval
+  });
 }
 
 async function handleMusicButton(
   interaction,
   client
 ) {
+  if (!interaction.isButton()) {
+    return false;
+  }
 
   if (
     !interaction.customId.startsWith(
@@ -250,302 +308,206 @@ async function handleMusicButton(
     !player ||
     !player.current
   ) {
-
     await interaction.reply({
       content:
-        "❌ এখন কোনো গান চলছে না.",
+        "❌ Nothing is playing.",
       ephemeral: true
     });
 
     return true;
   }
 
-  const state =
-    getState(
-      interaction.guildId
-    );
-
   try {
+    await interaction.deferUpdate();
 
-    switch (
-      interaction.customId
-    ) {
-
-      // =========================
-      // PAUSE / RESUME
-      // =========================
-
-      case "music_pause":
-
-        await player.pause(
-          !player.paused
-        );
-
-        break;
-
-
-      // =========================
-      // SKIP
-      // =========================
-
-      case "music_skip":
-
-        await player.stop();
-
-        break;
-
-
-      // =========================
-      // STOP
-      // =========================
-
-      case "music_stop":
-
-        player.queue.clear();
-
-        await player.stop();
-
-        player.destroy();
-
-        panels.delete(
-          interaction.guildId
-        );
-
-        await interaction.update({
-          content:
-            "⏹️ Music stopped.",
-          embeds: [],
-          components: []
-        });
-
-        return true;
-
-
-      // =========================
-      // PREVIOUS
-      // =========================
+    switch (interaction.customId) {
 
       case "music_previous": {
-
         const previous =
-          state.history.pop();
+          player.previous;
 
         if (!previous) {
-
-          await interaction.reply({
+          return interaction.followUp({
             content:
-              "⏮️ Previous song পাওয়া যায়নি.",
+              "❌ No previous song found.",
             ephemeral: true
           });
-
-          return true;
         }
 
-        state.goingPrevious = true;
+        const current =
+          player.current;
 
-        player.queue.unshift(
-          previous
-        );
+        player.queue.unshift(current);
+        player.queue.unshift(previous);
 
-        await player.stop();
+        player.stop();
+
+        await player.play();
 
         break;
       }
 
+      case "music_seek_back": {
+        const newPosition =
+          Math.max(
+            0,
+            Number(player.position || 0) -
+              10000
+          );
 
-      // =========================
-      // SHUFFLE
-      // =========================
+        player.seek(newPosition);
 
-      case "music_shuffle":
+        break;
+      }
 
+      case "music_play_pause": {
+        if (player.paused) {
+          await player.pause(false);
+        } else {
+          await player.pause(true);
+        }
+
+        break;
+      }
+
+      case "music_seek_forward": {
+        const duration =
+          Number(
+            player.current.info.duration ||
+            player.current.info.length ||
+            0
+          );
+
+        const newPosition =
+          Math.min(
+            duration,
+            Number(player.position || 0) +
+              10000
+          );
+
+        player.seek(newPosition);
+
+        break;
+      }
+
+      case "music_skip": {
+        player.stop();
+
+        break;
+      }
+
+      case "music_volume_down": {
+        const volume =
+          Math.max(
+            0,
+            Number(player.volume || 100) -
+              10
+          );
+
+        player.setVolume(volume);
+
+        break;
+      }
+
+      case "music_volume_up": {
+        const volume =
+          Math.min(
+            100,
+            Number(player.volume || 100) +
+              10
+          );
+
+        player.setVolume(volume);
+
+        break;
+      }
+
+      case "music_loop": {
+        const modes = [
+          "none",
+          "track",
+          "queue"
+        ];
+
+        const current =
+          getLoop(player);
+
+        const index =
+          modes.indexOf(current);
+
+        const next =
+          modes[
+            (index + 1) % modes.length
+          ];
+
+        player.setLoop(next);
+
+        break;
+      }
+
+      case "music_stop": {
+        player.queue.clear();
+        player.stop();
+
+        break;
+      }
+
+      case "music_shuffle": {
         if (
-          player.queue.size < 2
+          player.queue.length < 2
         ) {
-
-          await interaction.reply({
+          return interaction.followUp({
             content:
-              "❌ Shuffle করার মতো যথেষ্ট গান নেই.",
+              "❌ Queue-তে shuffle করার মতো যথেষ্ট song নেই.",
             ephemeral: true
           });
-
-          return true;
         }
 
         player.queue.shuffle();
 
         break;
-
-
-      // =========================
-      // LOOP
-      // =========================
-
-      case "music_loop":
-
-        if (
-          state.loop === "none"
-        ) {
-
-          state.loop = "track";
-
-        } else if (
-          state.loop === "track"
-        ) {
-
-          state.loop = "queue";
-
-        } else {
-
-          state.loop = "none";
-
-        }
-
-        if (
-          typeof player.setLoop ===
-          "function"
-        ) {
-
-          await player.setLoop(
-            state.loop
-          );
-
-        } else if (
-          typeof player.setLoopMode ===
-          "function"
-        ) {
-
-          await player.setLoopMode(
-            state.loop
-          );
-        }
-
-        break;
-
-
-      // =========================
-      // VOLUME DOWN
-      // =========================
-
-      case "music_vol_down":
-
-        state.volume =
-          Math.max(
-            0,
-            state.volume - 10
-          );
-
-        await player.setVolume(
-          state.volume
-        );
-
-        break;
-
-
-      // =========================
-      // VOLUME UP
-      // =========================
-
-      case "music_vol_up":
-
-        state.volume =
-          Math.min(
-            100,
-            state.volume + 10
-          );
-
-        await player.setVolume(
-          state.volume
-        );
-
-        break;
-
-
-      // =========================
-      // QUEUE
-      // =========================
-
-      case "music_queue": {
-
-        const queue =
-          Array.from(
-            player.queue || []
-          ).slice(0, 10);
-
-        const text =
-          queue.length
-            ? queue
-                .map(
-                  (song, index) =>
-                    `${index + 1}. ${song.info.title}`
-                )
-                .join("\n")
-            : "No upcoming songs.";
-
-        await interaction.reply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(
-                "📋 Outlaws Music Queue"
-              )
-              .setDescription(
-                text
-              )
-              .setColor(
-                0x8b5cf6
-              )
-          ],
-          ephemeral: true
-        });
-
-        return true;
       }
-
-
-      // =========================
-      // REFRESH
-      // =========================
-
-      case "music_refresh":
-
-        break;
-
-      default:
-
-        return false;
     }
 
-    await interaction.update(
-      createPanel(
-        player,
-        player.current,
-        state
-      )
-    );
+    // Panel immediately refresh
+    const state =
+      panels.get(
+        interaction.guildId
+      );
 
-    return true;
+    if (state?.message) {
+      const embed =
+        createEmbed(
+          client,
+          player,
+          player.current
+        );
+
+      await state.message.edit({
+        embeds: [embed],
+        components: createButtons()
+      }).catch(() => {});
+    }
 
   } catch (error) {
-
     console.error(
-      "Music button error:",
+      "Music panel error:",
       error
     );
 
     if (
-      !interaction.replied &&
-      !interaction.deferred
+      interaction.deferred ||
+      interaction.replied
     ) {
-
-      await interaction.reply({
+      await interaction.followUp({
         content:
-          "❌ এই control কাজ করাতে সমস্যা হয়েছে.",
+          "❌ Control ব্যবহার করতে সমস্যা হয়েছে.",
         ephemeral: true
       }).catch(() => {});
     }
-
-    return true;
   }
+
+  return true;
 }
 
 module.exports = {
